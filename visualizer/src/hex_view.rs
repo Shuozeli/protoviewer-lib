@@ -1,7 +1,7 @@
 use egui::text::LayoutJob;
 use egui::{Color32, FontId, ScrollArea, TextFormat, Ui};
 
-use crate::region::AnnotatedRegion;
+use crate::region::{brighten, AnnotatedRegion};
 
 pub struct HexViewOutput {
     pub hovered_region: Option<usize>,
@@ -9,6 +9,33 @@ pub struct HexViewOutput {
 }
 
 const BYTES_PER_ROW: usize = 16;
+
+/// Given a cursor position within a hex row, determine which byte index it falls on.
+fn byte_at_position(
+    pos: egui::Pos2,
+    rect: egui::Rect,
+    ui: &Ui,
+    row_start: usize,
+    data_len: usize,
+    byte_to_region: &[Option<usize>],
+) -> Option<usize> {
+    let font = FontId::monospace(13.0);
+    let char_width = ui.fonts(|f| f.glyph_width(&font, '0'));
+    // Address prefix is "XXXX: " = 6 chars
+    let addr_width = char_width * 6.0;
+    let hex_x = pos.x - rect.left() - addr_width;
+    if hex_x >= 0.0 {
+        // Each hex byte is "XX " = 3 chars
+        let byte_col = (hex_x / (char_width * 3.0)) as usize;
+        if byte_col < BYTES_PER_ROW {
+            let byte_idx = row_start + byte_col;
+            if byte_idx < data_len {
+                return byte_to_region[byte_idx];
+            }
+        }
+    }
+    None
+}
 
 pub fn show(
     ui: &mut Ui,
@@ -41,46 +68,28 @@ pub fn show(
                 // Detect which byte is under the cursor
                 if response.hovered() {
                     if let Some(pos) = response.hover_pos() {
-                        let rect = response.rect;
-                        let font = FontId::monospace(13.0);
-                        let char_width = ui.fonts(|f| f.glyph_width(&font, '0'));
-
-                        // Address prefix is "XXXX: " = 6 chars
-                        let addr_width = char_width * 6.0;
-                        let hex_x = pos.x - rect.left() - addr_width;
-
-                        if hex_x >= 0.0 {
-                            // Each hex byte is "XX " = 3 chars
-                            let byte_col = (hex_x / (char_width * 3.0)) as usize;
-                            if byte_col < BYTES_PER_ROW {
-                                let byte_idx = row_start + byte_col;
-                                if byte_idx < data.len() {
-                                    output.hovered_region = byte_to_region[byte_idx];
-                                }
-                            }
-                        }
+                        output.hovered_region = byte_at_position(
+                            pos,
+                            response.rect,
+                            ui,
+                            row_start,
+                            data.len(),
+                            &byte_to_region,
+                        );
                     }
                 }
 
                 // Detect click
                 if response.clicked() {
                     if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
-                        let rect = response.rect;
-                        let font = FontId::monospace(13.0);
-                        let char_width = ui.fonts(|f| f.glyph_width(&font, '0'));
-
-                        let addr_width = char_width * 6.0;
-                        let hex_x = pos.x - rect.left() - addr_width;
-
-                        if hex_x >= 0.0 {
-                            let byte_col = (hex_x / (char_width * 3.0)) as usize;
-                            if byte_col < BYTES_PER_ROW {
-                                let byte_idx = row_start + byte_col;
-                                if byte_idx < data.len() {
-                                    output.clicked_region = byte_to_region[byte_idx];
-                                }
-                            }
-                        }
+                        output.clicked_region = byte_at_position(
+                            pos,
+                            response.rect,
+                            ui,
+                            row_start,
+                            data.len(),
+                            &byte_to_region,
+                        );
                     }
                 }
             }
@@ -227,26 +236,18 @@ fn byte_style(
         })
         .unwrap_or(Color32::from_rgb(100, 100, 100));
 
+    let base_rgb = region_idx
+        .map(|r| annotations[r].region_type.color())
+        .unwrap_or([100, 100, 100]);
+
     match tier {
         2 => {
-            // Locked: brighten text, strong background
-            let [r, g, b, _] = base_color.to_array();
-            let bright = Color32::from_rgb(
-                r.saturating_add(60),
-                g.saturating_add(60),
-                b.saturating_add(60),
-            );
+            let bright = brighten(base_rgb, 60);
             let bg = Color32::from_rgba_unmultiplied(255, 255, 255, 45);
             (bright, bg)
         }
         1 => {
-            // Hovered: slightly brighten text, faint background
-            let [r, g, b, _] = base_color.to_array();
-            let bright = Color32::from_rgb(
-                r.saturating_add(30),
-                g.saturating_add(30),
-                b.saturating_add(30),
-            );
+            let bright = brighten(base_rgb, 30);
             let bg = Color32::from_rgba_unmultiplied(255, 255, 255, 20);
             (bright, bg)
         }

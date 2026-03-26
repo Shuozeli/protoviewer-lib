@@ -14,7 +14,8 @@ pub struct VisualizerApp {
     state: AppState,
     dispatch_depth: usize,
 
-    #[allow(dead_code)]
+    // Read only on wasm32 (in poll_platform_events); on native it is write-only.
+    #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
     cjk_font_loaded: bool,
     #[cfg(target_arch = "wasm32")]
     pending_cjk_font: std::sync::Arc<std::sync::Mutex<Option<Vec<u8>>>>,
@@ -114,24 +115,9 @@ impl VisualizerApp {
             },
 
             Effect::GenerateRandomSchemaAndData { seed } => {
-                let config = protoc_rs_proto_gen::GenConfig {
-                    max_messages: 5,
-                    max_fields_per_message: 10,
-                    max_enums: 3,
-                    max_enum_values: 6,
-                    max_nesting_depth: 3,
-                    prob_repeated: 0.3,
-                    prob_enum_field: 0.15,
-                    prob_message_field: 0.35,
-                    prob_nested_message: 0.6,
-                };
+                let config = crate::state::default_gen_config();
                 let generated = protoc_rs_proto_gen::generate(seed, config);
-                let hex_data: String = generated
-                    .binary_data
-                    .iter()
-                    .map(|b| format!("{b:02x}"))
-                    .collect::<Vec<_>>()
-                    .join(" ");
+                let hex_data = crate::state::bytes_to_hex(&generated.binary_data);
                 self.dispatch(Command::RandomGenerated {
                     schema_text: generated.schema_text,
                     hex_data,

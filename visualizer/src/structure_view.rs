@@ -1,6 +1,6 @@
 use egui::{CollapsingHeader, Color32, RichText, ScrollArea, Ui};
 
-use crate::region::AnnotatedRegion;
+use crate::region::{brighten, AnnotatedRegion};
 
 pub struct StructureViewOutput {
     pub hovered_region: Option<usize>,
@@ -72,24 +72,14 @@ fn render_tree_node(
     );
 
     let text = if is_locked {
-        // Locked: bright color + bold + underline
-        let bright = Color32::from_rgb(
-            r.saturating_add(60),
-            g.saturating_add(60),
-            b.saturating_add(60),
-        );
+        let bright = brighten([r, g, b], 60);
         RichText::new(&label)
             .color(bright)
             .strong()
             .underline()
             .size(13.0)
     } else if is_hovered {
-        // Hovered: slightly brighter + bold
-        let bright = Color32::from_rgb(
-            r.saturating_add(30),
-            g.saturating_add(30),
-            b.saturating_add(30),
-        );
+        let bright = brighten([r, g, b], 30);
         RichText::new(&label).color(bright).strong().size(13.0)
     } else {
         RichText::new(&label).color(base_color).size(13.0)

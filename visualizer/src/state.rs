@@ -25,7 +25,6 @@ pub enum DataFormat {
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum Command {
     // -- User interactions --
     SelectTemplate(usize),
@@ -57,7 +56,6 @@ pub enum Command {
         schema_text: String,
         hex_data: String,
     },
-    RandomGenerateError(String),
 }
 
 impl std::fmt::Display for Command {
@@ -79,7 +77,6 @@ impl std::fmt::Display for Command {
             }
             Command::ProtoWalkError(e) => write!(f, "ProtoWalkError({e})"),
             Command::RandomGenerated { .. } => write!(f, "RandomGenerated(...)"),
-            Command::RandomGenerateError(e) => write!(f, "RandomGenerateError({e})"),
         }
     }
 }
@@ -115,6 +112,8 @@ impl std::fmt::Display for Effect {
 
 const MAX_EVENT_LOG_ENTRIES: usize = 200;
 
+// TODO: Fields are populated in dispatch() but not yet consumed by any UI.
+// Kept for future event log viewer.
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct EventLogEntry {
@@ -344,12 +343,14 @@ impl AppState {
                 let data_len = binary.len();
                 self.binary_data = Some(binary);
                 self.annotations = Some(annotations);
-                self.decoded_json = decoded_json.clone();
                 self.error = None;
                 self.status_message =
                     format!("{data_len} bytes, {count} regions. Hover to explore.");
                 if self.data_format == DataFormat::Json {
+                    self.decoded_json = decoded_json.clone();
                     self.data_text = decoded_json;
+                } else {
+                    self.decoded_json = decoded_json;
                 }
             }
             Command::ProtoWalkError(err) => {
@@ -371,9 +372,6 @@ impl AppState {
                 effects.push(Effect::ParseProtoHexAndWalk { hex_text: hex_data });
             }
 
-            Command::RandomGenerateError(err) => {
-                self.status_message = format!("Random generation error: {err}");
-            }
         }
 
         // Log
@@ -427,6 +425,20 @@ impl AppState {
 // Helpers
 // ---------------------------------------------------------------------------
 
+pub fn default_gen_config() -> protoc_rs_proto_gen::GenConfig {
+    protoc_rs_proto_gen::GenConfig {
+        max_messages: 5,
+        max_fields_per_message: 10,
+        max_enums: 3,
+        max_enum_values: 6,
+        max_nesting_depth: 3,
+        prob_repeated: 0.3,
+        prob_enum_field: 0.15,
+        prob_message_field: 0.35,
+        prob_nested_message: 0.6,
+    }
+}
+
 pub fn bytes_to_hex(data: &[u8]) -> String {
     data.iter()
         .map(|b| format!("{b:02x}"))
@@ -468,24 +480,9 @@ mod tests {
                 Err(e) => Some(Command::ProtoWalkError(format!("Hex parse error: {e}"))),
             },
             Effect::GenerateRandomSchemaAndData { seed } => {
-                let config = protoc_rs_proto_gen::GenConfig {
-                    max_messages: 5,
-                    max_fields_per_message: 10,
-                    max_enums: 3,
-                    max_enum_values: 6,
-                    max_nesting_depth: 3,
-                    prob_repeated: 0.3,
-                    prob_enum_field: 0.15,
-                    prob_message_field: 0.35,
-                    prob_nested_message: 0.6,
-                };
+                let config = default_gen_config();
                 let generated = protoc_rs_proto_gen::generate(seed, config);
-                let hex_data: String = generated
-                    .binary_data
-                    .iter()
-                    .map(|b| format!("{b:02x}"))
-                    .collect::<Vec<_>>()
-                    .join(" ");
+                let hex_data = bytes_to_hex(&generated.binary_data);
                 Some(Command::RandomGenerated {
                     schema_text: generated.schema_text,
                     hex_data,

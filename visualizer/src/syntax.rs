@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 //! Syntax highlighting for proto schema and JSON text editors.
 //!
 //! Produces `egui::text::LayoutJob` values that can be used with
@@ -6,10 +5,6 @@
 
 use egui::text::LayoutJob;
 use egui::{Color32, FontId, TextFormat};
-
-// ---------------------------------------------------------------------------
-// Color palette (dark theme)
-// ---------------------------------------------------------------------------
 
 const COLOR_KEYWORD: Color32 = Color32::from_rgb(86, 156, 214); // blue
 const COLOR_TYPE: Color32 = Color32::from_rgb(78, 201, 176); // teal/cyan
@@ -23,155 +18,6 @@ const COLOR_PUNCTUATION: Color32 = Color32::from_rgb(150, 150, 150); // gray
 const COLOR_JSON_KEY: Color32 = Color32::from_rgb(156, 220, 254); // light blue
 const COLOR_JSON_STRING: Color32 = Color32::from_rgb(206, 145, 120); // orange-brown
 const COLOR_JSON_BOOL_NULL: Color32 = Color32::from_rgb(86, 156, 214); // blue
-
-// ---------------------------------------------------------------------------
-// FBS keywords and built-in types
-// ---------------------------------------------------------------------------
-
-const FBS_KEYWORDS: &[&str] = &[
-    "table",
-    "struct",
-    "enum",
-    "union",
-    "namespace",
-    "root_type",
-    "file_identifier",
-    "file_extension",
-    "include",
-    "attribute",
-    "rpc_service",
-];
-
-const FBS_TYPES: &[&str] = &[
-    "bool", "byte", "ubyte", "short", "ushort", "int", "uint", "long", "ulong", "float", "double",
-    "string", "int8", "uint8", "int16", "uint16", "int32", "uint32", "int64", "uint64", "float32",
-    "float64",
-];
-
-// ---------------------------------------------------------------------------
-// FBS syntax highlighting
-// ---------------------------------------------------------------------------
-
-/// Produce a `LayoutJob` with FBS syntax coloring for the given text.
-pub fn highlight_fbs(text: &str, font: &FontId, wrap_width: f32) -> LayoutJob {
-    let mut job = LayoutJob::default();
-    job.wrap.max_width = wrap_width;
-
-    let bytes = text.as_bytes();
-    let len = bytes.len();
-    let mut i = 0;
-
-    while i < len {
-        // -- Line comment: // ... \n --
-        if i + 1 < len && bytes[i] == b'/' && bytes[i + 1] == b'/' {
-            let start = i;
-            while i < len && bytes[i] != b'\n' {
-                i += 1;
-            }
-            append(&mut job, &text[start..i], font, COLOR_COMMENT);
-            continue;
-        }
-
-        // -- Block comment: /* ... */ --
-        if i + 1 < len && bytes[i] == b'/' && bytes[i + 1] == b'*' {
-            let start = i;
-            i += 2;
-            while i + 1 < len && !(bytes[i] == b'*' && bytes[i + 1] == b'/') {
-                i += 1;
-            }
-            if i + 1 < len {
-                i += 2; // skip */
-            }
-            append(&mut job, &text[start..i], font, COLOR_COMMENT);
-            continue;
-        }
-
-        // -- String literal: "..." --
-        if bytes[i] == b'"' {
-            let start = i;
-            i += 1;
-            while i < len && bytes[i] != b'"' {
-                if bytes[i] == b'\\' && i + 1 < len {
-                    i += 1; // skip escaped char
-                }
-                i += 1;
-            }
-            if i < len {
-                i += 1; // skip closing quote
-            }
-            append(&mut job, &text[start..i], font, COLOR_STRING);
-            continue;
-        }
-
-        // -- Number literal --
-        if bytes[i].is_ascii_digit()
-            || (bytes[i] == b'-' && i + 1 < len && bytes[i + 1].is_ascii_digit())
-        {
-            // Check that this isn't part of an identifier
-            if i == 0 || !is_ident_char(bytes[i - 1]) || bytes[i] == b'-' {
-                let start = i;
-                if bytes[i] == b'-' {
-                    i += 1;
-                }
-                // Hex: 0x...
-                if i + 1 < len && bytes[i] == b'0' && (bytes[i + 1] == b'x' || bytes[i + 1] == b'X')
-                {
-                    i += 2;
-                    while i < len && bytes[i].is_ascii_hexdigit() {
-                        i += 1;
-                    }
-                } else {
-                    while i < len && (bytes[i].is_ascii_digit() || bytes[i] == b'.') {
-                        i += 1;
-                    }
-                    // Scientific notation
-                    if i < len && (bytes[i] == b'e' || bytes[i] == b'E') {
-                        i += 1;
-                        if i < len && (bytes[i] == b'+' || bytes[i] == b'-') {
-                            i += 1;
-                        }
-                        while i < len && bytes[i].is_ascii_digit() {
-                            i += 1;
-                        }
-                    }
-                }
-                append(&mut job, &text[start..i], font, COLOR_NUMBER);
-                continue;
-            }
-        }
-
-        // -- Identifier / keyword / type --
-        if is_ident_start(bytes[i]) {
-            let start = i;
-            while i < len && is_ident_char(bytes[i]) {
-                i += 1;
-            }
-            let word = &text[start..i];
-            let color = if FBS_KEYWORDS.contains(&word) {
-                COLOR_KEYWORD
-            } else if FBS_TYPES.contains(&word) {
-                COLOR_TYPE
-            } else {
-                COLOR_DEFAULT
-            };
-            append(&mut job, word, font, color);
-            continue;
-        }
-
-        // -- Punctuation and other single characters --
-        // Handle multi-byte UTF-8 characters properly
-        let start = i;
-        let ch = text[i..].chars().next().unwrap_or(' ');
-        i += ch.len_utf8();
-        append(&mut job, &text[start..i], font, COLOR_DEFAULT);
-    }
-
-    job
-}
-
-// ---------------------------------------------------------------------------
-// JSON syntax highlighting
-// ---------------------------------------------------------------------------
 
 /// Produce a `LayoutJob` with JSON syntax coloring for the given text.
 pub fn highlight_json(text: &str, font: &FontId, wrap_width: f32) -> LayoutJob {
@@ -280,10 +126,6 @@ pub fn highlight_json(text: &str, font: &FontId, wrap_width: f32) -> LayoutJob {
     job
 }
 
-// ---------------------------------------------------------------------------
-// Proto keywords and built-in types
-// ---------------------------------------------------------------------------
-
 const PROTO_KEYWORDS: &[&str] = &[
     "syntax",
     "edition",
@@ -317,10 +159,6 @@ const PROTO_TYPES: &[&str] = &[
 ];
 
 const PROTO_CONSTANTS: &[&str] = &["true", "false", "inf", "nan"];
-
-// ---------------------------------------------------------------------------
-// Proto syntax highlighting
-// ---------------------------------------------------------------------------
 
 /// Produce a `LayoutJob` with .proto syntax coloring for the given text.
 pub fn highlight_proto(text: &str, font: &FontId, wrap_width: f32) -> LayoutJob {
@@ -435,10 +273,6 @@ pub fn highlight_proto(text: &str, font: &FontId, wrap_width: f32) -> LayoutJob 
 
     job
 }
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 fn append(job: &mut LayoutJob, text: &str, font: &FontId, color: Color32) {
     job.append(

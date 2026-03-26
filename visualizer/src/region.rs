@@ -1,5 +1,7 @@
 use std::ops::Range;
 
+use egui::Color32;
+
 #[derive(Debug, Clone)]
 pub struct AnnotatedRegion {
     pub byte_range: Range<usize>,
@@ -9,6 +11,37 @@ pub struct AnnotatedRegion {
     pub value_display: String,
     pub children: Vec<usize>,
     pub depth: usize,
+}
+
+impl AnnotatedRegion {
+    pub fn new(
+        byte_range: Range<usize>,
+        region_type: RegionType,
+        label: String,
+        field_path: Vec<String>,
+        value_display: String,
+        children: Vec<usize>,
+        depth: usize,
+    ) -> Self {
+        Self {
+            byte_range,
+            region_type,
+            label,
+            field_path,
+            value_display,
+            children,
+            depth,
+        }
+    }
+}
+
+/// Brighten a base color by adding `amount` to each RGB channel (saturating).
+pub fn brighten(color: [u8; 3], amount: u8) -> Color32 {
+    Color32::from_rgb(
+        color[0].saturating_add(amount),
+        color[1].saturating_add(amount),
+        color[2].saturating_add(amount),
+    )
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

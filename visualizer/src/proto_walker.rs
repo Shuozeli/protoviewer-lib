@@ -34,19 +34,17 @@ pub fn walk_proto(data: &[u8]) -> Result<Vec<AnnotatedRegion>, ProtoWalkError> {
     let children = walk_message(&mut ctx, 0, data.len())?;
 
     // Create root message region
-    let root = AnnotatedRegion {
-        byte_range: 0..data.len(),
-        region_type: RegionType::ProtoMessage {
+    regions.push(AnnotatedRegion::new(
+        0..data.len(),
+        RegionType::ProtoMessage {
             type_name: "root".to_string(),
         },
-        label: "root message".to_string(),
-        field_path: vec!["message".to_string()],
-        value_display: format!("{} bytes", data.len()),
+        "root message".to_string(),
+        vec!["message".to_string()],
+        format!("{} bytes", data.len()),
         children,
-
-        depth: 0,
-    };
-    regions.push(root);
+        0,
+    ));
 
     Ok(regions)
 }
@@ -56,6 +54,39 @@ struct WalkContext<'a> {
     regions: &'a mut Vec<AnnotatedRegion>,
     depth: usize,
     path: Vec<String>,
+}
+
+impl WalkContext<'_> {
+    /// Build a field_path by appending `field_name` to the current path.
+    fn field_path(&self, field_name: &str) -> Vec<String> {
+        let mut p = self.path.clone();
+        p.push(field_name.to_string());
+        p
+    }
+
+    /// Push an AnnotatedRegion and return its index.
+    fn push_region(
+        &mut self,
+        byte_range: std::ops::Range<usize>,
+        region_type: RegionType,
+        label: String,
+        field_path: Vec<String>,
+        value_display: String,
+        children: Vec<usize>,
+        depth: usize,
+    ) -> usize {
+        let idx = self.regions.len();
+        self.regions.push(AnnotatedRegion::new(
+            byte_range,
+            region_type,
+            label,
+            field_path,
+            value_display,
+            children,
+            depth,
+        ));
+        idx
+    }
 }
 
 /// Read a varint starting at `offset`. Returns (value, bytes_consumed).
@@ -181,20 +212,18 @@ fn walk_message(
         offset += tag_len;
 
         // Create tag region
-        let tag_idx = ctx.regions.len();
-        ctx.regions.push(AnnotatedRegion {
-            byte_range: tag_start..offset,
-            region_type: RegionType::ProtoTag {
+        let tag_idx = ctx.push_region(
+            tag_start..offset,
+            RegionType::ProtoTag {
                 field_number,
                 wire_type,
             },
-            label: format!("tag: field {field_number}, wire type {wire_type}"),
-            field_path: ctx.path.clone(),
-            value_display: format!("field={field_number} type={}", wire_type_name(wire_type)),
-            children: vec![],
-
-            depth: ctx.depth + 1,
-        });
+            format!("tag: field {field_number}, wire type {wire_type}"),
+            ctx.path.clone(),
+            format!("field={field_number} type={}", wire_type_name(wire_type)),
+            vec![],
+            ctx.depth + 1,
+        );
 
         match wire_type {
             0 => {
@@ -203,41 +232,29 @@ fn walk_message(
                 let value_range = offset..offset + varint_len;
                 offset += varint_len;
 
-                let val_idx = ctx.regions.len();
-                ctx.regions.push(AnnotatedRegion {
-                    byte_range: value_range,
-                    region_type: RegionType::ProtoVarint {
+                let val_idx = ctx.push_region(
+                    value_range,
+                    RegionType::ProtoVarint {
                         field_name: field_name.clone(),
                     },
-                    label: format!("{field_name}: {}", format_varint_value(value)),
-                    field_path: {
-                        let mut p = ctx.path.clone();
-                        p.push(field_name.clone());
-                        p
-                    },
-                    value_display: format_varint_value(value),
-                    children: vec![],
+                    format!("{field_name}: {}", format_varint_value(value)),
+                    ctx.field_path(&field_name),
+                    format_varint_value(value),
+                    vec![],
+                    ctx.depth + 1,
+                );
 
-                    depth: ctx.depth + 1,
-                });
-
-                let group_idx = ctx.regions.len();
-                ctx.regions.push(AnnotatedRegion {
-                    byte_range: tag_start..offset,
-                    region_type: RegionType::ProtoVarint {
+                let group_idx = ctx.push_region(
+                    tag_start..offset,
+                    RegionType::ProtoVarint {
                         field_name: field_name.clone(),
                     },
-                    label: format!("{field_name} (varint)"),
-                    field_path: {
-                        let mut p = ctx.path.clone();
-                        p.push(field_name);
-                        p
-                    },
-                    value_display: format_varint_value(value),
-                    children: vec![tag_idx, val_idx],
-
-                    depth: ctx.depth,
-                });
+                    format!("{field_name} (varint)"),
+                    ctx.field_path(&field_name),
+                    format_varint_value(value),
+                    vec![tag_idx, val_idx],
+                    ctx.depth,
+                );
                 children.push(group_idx);
             }
             1 => {
@@ -257,41 +274,29 @@ fn walk_message(
                     format!("{as_u64}")
                 };
 
-                let val_idx = ctx.regions.len();
-                ctx.regions.push(AnnotatedRegion {
-                    byte_range: value_range,
-                    region_type: RegionType::ProtoFixed64 {
+                let val_idx = ctx.push_region(
+                    value_range,
+                    RegionType::ProtoFixed64 {
                         field_name: field_name.clone(),
                     },
-                    label: format!("{field_name}: {display}"),
-                    field_path: {
-                        let mut p = ctx.path.clone();
-                        p.push(field_name.clone());
-                        p
-                    },
-                    value_display: display.clone(),
-                    children: vec![],
+                    format!("{field_name}: {display}"),
+                    ctx.field_path(&field_name),
+                    display.clone(),
+                    vec![],
+                    ctx.depth + 1,
+                );
 
-                    depth: ctx.depth + 1,
-                });
-
-                let group_idx = ctx.regions.len();
-                ctx.regions.push(AnnotatedRegion {
-                    byte_range: tag_start..offset,
-                    region_type: RegionType::ProtoFixed64 {
+                let group_idx = ctx.push_region(
+                    tag_start..offset,
+                    RegionType::ProtoFixed64 {
                         field_name: field_name.clone(),
                     },
-                    label: format!("{field_name} (fixed64)"),
-                    field_path: {
-                        let mut p = ctx.path.clone();
-                        p.push(field_name);
-                        p
-                    },
-                    value_display: display,
-                    children: vec![tag_idx, val_idx],
-
-                    depth: ctx.depth,
-                });
+                    format!("{field_name} (fixed64)"),
+                    ctx.field_path(&field_name),
+                    display,
+                    vec![tag_idx, val_idx],
+                    ctx.depth,
+                );
                 children.push(group_idx);
             }
             5 => {
@@ -311,41 +316,29 @@ fn walk_message(
                     format!("{as_u32}")
                 };
 
-                let val_idx = ctx.regions.len();
-                ctx.regions.push(AnnotatedRegion {
-                    byte_range: value_range,
-                    region_type: RegionType::ProtoFixed32 {
+                let val_idx = ctx.push_region(
+                    value_range,
+                    RegionType::ProtoFixed32 {
                         field_name: field_name.clone(),
                     },
-                    label: format!("{field_name}: {display}"),
-                    field_path: {
-                        let mut p = ctx.path.clone();
-                        p.push(field_name.clone());
-                        p
-                    },
-                    value_display: display.clone(),
-                    children: vec![],
+                    format!("{field_name}: {display}"),
+                    ctx.field_path(&field_name),
+                    display.clone(),
+                    vec![],
+                    ctx.depth + 1,
+                );
 
-                    depth: ctx.depth + 1,
-                });
-
-                let group_idx = ctx.regions.len();
-                ctx.regions.push(AnnotatedRegion {
-                    byte_range: tag_start..offset,
-                    region_type: RegionType::ProtoFixed32 {
+                let group_idx = ctx.push_region(
+                    tag_start..offset,
+                    RegionType::ProtoFixed32 {
                         field_name: field_name.clone(),
                     },
-                    label: format!("{field_name} (fixed32)"),
-                    field_path: {
-                        let mut p = ctx.path.clone();
-                        p.push(field_name);
-                        p
-                    },
-                    value_display: display,
-                    children: vec![tag_idx, val_idx],
-
-                    depth: ctx.depth,
-                });
+                    format!("{field_name} (fixed32)"),
+                    ctx.field_path(&field_name),
+                    display,
+                    vec![tag_idx, val_idx],
+                    ctx.depth,
+                );
                 children.push(group_idx);
             }
             2 => {
@@ -363,17 +356,15 @@ fn walk_message(
                 offset += data_len;
 
                 // Length prefix region
-                let len_idx = ctx.regions.len();
-                ctx.regions.push(AnnotatedRegion {
-                    byte_range: len_range,
-                    region_type: RegionType::ProtoLength,
-                    label: format!("length: {data_len}"),
-                    field_path: ctx.path.clone(),
-                    value_display: format!("{data_len}"),
-                    children: vec![],
-
-                    depth: ctx.depth + 2,
-                });
+                let len_idx = ctx.push_region(
+                    len_range,
+                    RegionType::ProtoLength,
+                    format!("length: {data_len}"),
+                    ctx.path.clone(),
+                    format!("{data_len}"),
+                    vec![],
+                    ctx.depth + 2,
+                );
 
                 // Try to decode as nested message
                 let (sub_children, data_region_type, data_display) =
@@ -384,23 +375,17 @@ fn walk_message(
                         ctx.path.pop();
                         ctx.depth -= 1;
 
-                        let msg_idx = ctx.regions.len();
-                        ctx.regions.push(AnnotatedRegion {
-                            byte_range: data_range.clone(),
-                            region_type: RegionType::ProtoMessage {
+                        let msg_idx = ctx.push_region(
+                            data_range.clone(),
+                            RegionType::ProtoMessage {
                                 type_name: field_name.clone(),
                             },
-                            label: format!("{field_name} (message)"),
-                            field_path: {
-                                let mut p = ctx.path.clone();
-                                p.push(field_name.clone());
-                                p
-                            },
-                            value_display: format!("{data_len} bytes"),
-                            children: msg_children,
-
-                            depth: ctx.depth + 1,
-                        });
+                            format!("{field_name} (message)"),
+                            ctx.field_path(&field_name),
+                            format!("{data_len} bytes"),
+                            msg_children,
+                            ctx.depth + 1,
+                        );
 
                         (
                             vec![tag_idx, len_idx, msg_idx],
@@ -417,23 +402,17 @@ fn walk_message(
                             format!("\"{text}\"")
                         };
 
-                        let str_idx = ctx.regions.len();
-                        ctx.regions.push(AnnotatedRegion {
-                            byte_range: data_range.clone(),
-                            region_type: RegionType::ProtoString {
+                        let str_idx = ctx.push_region(
+                            data_range.clone(),
+                            RegionType::ProtoString {
                                 field_name: field_name.clone(),
                             },
-                            label: format!("{field_name}: {display}"),
-                            field_path: {
-                                let mut p = ctx.path.clone();
-                                p.push(field_name.clone());
-                                p
-                            },
-                            value_display: display.clone(),
-                            children: vec![],
-
-                            depth: ctx.depth + 2,
-                        });
+                            format!("{field_name}: {display}"),
+                            ctx.field_path(&field_name),
+                            display.clone(),
+                            vec![],
+                            ctx.depth + 2,
+                        );
 
                         (
                             vec![tag_idx, len_idx, str_idx],
@@ -444,23 +423,17 @@ fn walk_message(
                         )
                     } else {
                         let display = format!("{data_len} bytes");
-                        let bytes_idx = ctx.regions.len();
-                        ctx.regions.push(AnnotatedRegion {
-                            byte_range: data_range.clone(),
-                            region_type: RegionType::ProtoBytes {
+                        let bytes_idx = ctx.push_region(
+                            data_range.clone(),
+                            RegionType::ProtoBytes {
                                 field_name: field_name.clone(),
                             },
-                            label: format!("{field_name}: {display}"),
-                            field_path: {
-                                let mut p = ctx.path.clone();
-                                p.push(field_name.clone());
-                                p
-                            },
-                            value_display: display.clone(),
-                            children: vec![],
-
-                            depth: ctx.depth + 2,
-                        });
+                            format!("{field_name}: {display}"),
+                            ctx.field_path(&field_name),
+                            display.clone(),
+                            vec![],
+                            ctx.depth + 2,
+                        );
 
                         (
                             vec![tag_idx, len_idx, bytes_idx],
@@ -471,21 +444,15 @@ fn walk_message(
                         )
                     };
 
-                let group_idx = ctx.regions.len();
-                ctx.regions.push(AnnotatedRegion {
-                    byte_range: tag_start..offset,
-                    region_type: data_region_type,
-                    label: format!("{field_name} (length-delimited)"),
-                    field_path: {
-                        let mut p = ctx.path.clone();
-                        p.push(field_name);
-                        p
-                    },
-                    value_display: data_display,
-                    children: sub_children,
-
-                    depth: ctx.depth,
-                });
+                let group_idx = ctx.push_region(
+                    tag_start..offset,
+                    data_region_type,
+                    format!("{field_name} (length-delimited)"),
+                    ctx.field_path(&field_name),
+                    data_display,
+                    sub_children,
+                    ctx.depth,
+                );
                 children.push(group_idx);
             }
             _ => {
