@@ -371,7 +371,6 @@ impl AppState {
                 self.status_message = "Random proto schema and data generated.".to_string();
                 effects.push(Effect::ParseProtoHexAndWalk { hex_text: hex_data });
             }
-
         }
 
         // Log

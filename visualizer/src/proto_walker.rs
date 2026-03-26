@@ -65,6 +65,7 @@ impl WalkContext<'_> {
     }
 
     /// Push an AnnotatedRegion and return its index.
+    #[allow(clippy::too_many_arguments)]
     fn push_region(
         &mut self,
         byte_range: std::ops::Range<usize>,
