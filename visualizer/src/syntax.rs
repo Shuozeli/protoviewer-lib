@@ -106,12 +106,12 @@ pub fn highlight_json(text: &str, font: &FontId, wrap_width: f32) -> LayoutJob {
 
         // -- Brackets, braces, colon, comma --
         if matches!(b, b'{' | b'}' | b'[' | b']') {
-            append(&mut job, &text[i..i + 1], font, COLOR_DEFAULT);
+            append(&mut job, &text[i..=i], font, COLOR_DEFAULT);
             i += 1;
             continue;
         }
         if matches!(b, b':' | b',') {
-            append(&mut job, &text[i..i + 1], font, COLOR_PUNCTUATION);
+            append(&mut job, &text[i..=i], font, COLOR_PUNCTUATION);
             i += 1;
             continue;
         }

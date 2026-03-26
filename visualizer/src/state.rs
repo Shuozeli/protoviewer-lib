@@ -236,10 +236,10 @@ impl AppState {
                 self.data_format = new_format;
                 match (prev, new_format) {
                     (DataFormat::Binary, DataFormat::Json) => {
-                        if !self.decoded_json.is_empty() {
-                            self.data_text = self.decoded_json.clone();
-                        } else {
+                        if self.decoded_json.is_empty() {
                             self.data_text = "{}".to_string();
+                        } else {
+                            self.data_text = self.decoded_json.clone();
                         }
                         self.status_message = "Switched to JSON view.".to_string();
                     }
@@ -364,7 +364,7 @@ impl AppState {
                 hex_data,
             } => {
                 self.schema_text = schema_text;
-                self.data_text = hex_data.clone();
+                self.data_text.clone_from(&hex_data);
                 self.data_format = DataFormat::Json;
                 self.locked_region = None;
                 self.error = None;
@@ -374,7 +374,7 @@ impl AppState {
         }
 
         // Log
-        let effect_strs: Vec<String> = effects.iter().map(|e| e.to_string()).collect();
+        let effect_strs: Vec<String> = effects.iter().map(ToString::to_string).collect();
         self.event_log.push_back(EventLogEntry {
             command: cmd_str,
             effects: effect_strs,

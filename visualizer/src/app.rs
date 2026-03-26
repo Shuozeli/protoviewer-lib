@@ -307,8 +307,9 @@ fn proto_annotations_to_json(annotations: &[crate::region::AnnotatedRegion]) -> 
                         | RegionType::ProtoString { field_name }
                         | RegionType::ProtoBytes { field_name }
                         | RegionType::ProtoLengthDelimited { field_name } => field_name.clone(),
-                        RegionType::ProtoTag { .. } | RegionType::ProtoLength => continue,
-                        _ => continue,
+                        RegionType::ProtoTag { .. }
+                        | RegionType::ProtoLength
+                        | RegionType::ProtoMessage { .. } => continue,
                     };
 
                     let nested_msg = child.children.iter().find(|&&c| {

@@ -65,8 +65,7 @@ impl RegionType {
             RegionType::ProtoVarint { .. } => [60, 179, 113],
             RegionType::ProtoFixed64 { .. } | RegionType::ProtoFixed32 { .. } => [255, 140, 0],
             RegionType::ProtoLengthDelimited { .. } | RegionType::ProtoLength => [147, 112, 219],
-            RegionType::ProtoBytes { .. } => [218, 165, 32],
-            RegionType::ProtoString { .. } => [218, 165, 32],
+            RegionType::ProtoBytes { .. } | RegionType::ProtoString { .. } => [218, 165, 32],
         }
     }
 

@@ -3,9 +3,9 @@
 //! Wire format (before compression):
 //!   [0]     version byte (currently 1)
 //!   [1]     data format (0 = JSON, 1 = Hex)
-//!   [2..6]  schema_text length as u32 LE
-//!   [6..6+N] schema_text UTF-8
-//!   [6+N..] data_text UTF-8
+//!   [2..6]  `schema_text` length as u32 LE
+//!   [6..6+N] `schema_text` UTF-8
+//!   [6+N..] `data_text` UTF-8
 //!
 //! The wire bytes are deflate-compressed, then base64url-encoded (no padding).
 

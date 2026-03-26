@@ -133,7 +133,7 @@ fn render_hex_row(
 
     // Address prefix
     job.append(
-        &format!("{:04X}: ", row_start),
+        &format!("{row_start:04X}: "),
         0.0,
         TextFormat {
             font_id: font.clone(),
@@ -229,16 +229,7 @@ fn byte_style(
     tier: u8,
     annotations: &[AnnotatedRegion],
 ) -> (Color32, Color32) {
-    let base_color = region_idx
-        .map(|r| {
-            let [red, green, blue] = annotations[r].region_type.color();
-            Color32::from_rgb(red, green, blue)
-        })
-        .unwrap_or(Color32::from_rgb(100, 100, 100));
-
-    let base_rgb = region_idx
-        .map(|r| annotations[r].region_type.color())
-        .unwrap_or([100, 100, 100]);
+    let base_rgb = region_idx.map_or([100, 100, 100], |r| annotations[r].region_type.color());
 
     match tier {
         2 => {
@@ -251,7 +242,10 @@ fn byte_style(
             let bg = Color32::from_rgba_unmultiplied(255, 255, 255, 20);
             (bright, bg)
         }
-        _ => (base_color, Color32::TRANSPARENT),
+        _ => {
+            let [r, g, b] = base_rgb;
+            (Color32::from_rgb(r, g, b), Color32::TRANSPARENT)
+        }
     }
 }
 

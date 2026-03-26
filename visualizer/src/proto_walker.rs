@@ -57,14 +57,14 @@ struct WalkContext<'a> {
 }
 
 impl WalkContext<'_> {
-    /// Build a field_path by appending `field_name` to the current path.
+    /// Build a `field_path` by appending `field_name` to the current path.
     fn field_path(&self, field_name: &str) -> Vec<String> {
         let mut p = self.path.clone();
         p.push(field_name.to_string());
         p
     }
 
-    /// Push an AnnotatedRegion and return its index.
+    /// Push an `AnnotatedRegion` and return its index.
     #[allow(clippy::too_many_arguments)]
     fn push_region(
         &mut self,
@@ -90,7 +90,7 @@ impl WalkContext<'_> {
     }
 }
 
-/// Read a varint starting at `offset`. Returns (value, bytes_consumed).
+/// Read a varint starting at `offset`. Returns (value, `bytes_consumed`).
 fn read_varint(data: &[u8], offset: usize) -> Result<(u64, usize), ProtoWalkError> {
     let mut result: u64 = 0;
     let mut shift = 0u32;
@@ -100,7 +100,7 @@ fn read_varint(data: &[u8], offset: usize) -> Result<(u64, usize), ProtoWalkErro
             return Err(ProtoWalkError::UnexpectedEof { offset: offset + i });
         }
         let b = data[offset + i];
-        result |= ((b & 0x7F) as u64) << shift;
+        result |= u64::from(b & 0x7F) << shift;
         i += 1;
         if b & 0x80 == 0 {
             return Ok((result, i));
@@ -145,9 +145,8 @@ fn looks_like_proto_message(data: &[u8]) -> bool {
     let mut offset = 0;
     let mut field_count = 0;
     while offset < data.len() {
-        let (tag, tag_len) = match read_varint(data, offset) {
-            Ok(v) => v,
-            Err(_) => return false,
+        let Ok((tag, tag_len)) = read_varint(data, offset) else {
+            return false;
         };
         let wire_type = (tag & 0x07) as u8;
         let field_number = (tag >> 3) as u32;
@@ -168,9 +167,8 @@ fn looks_like_proto_message(data: &[u8]) -> bool {
                 offset += 8;
             }
             2 => {
-                let (len, len_bytes) = match read_varint(data, offset) {
-                    Ok(v) => v,
-                    Err(_) => return false,
+                let Ok((len, len_bytes)) = read_varint(data, offset) else {
+                    return false;
                 };
                 offset += len_bytes;
                 if offset + len as usize > data.len() {
